@@ -48,8 +48,8 @@
 					overview: '',
 					posterPath: item.posterPath,
 					backdropPath: item.backdropPath,
-					firstAirDate: item.year ? `${item.year}-01-01` : null,
-					releaseDate: item.year ? `${item.year}-01-01` : null,
+					firstAirDate: null,
+					releaseDate: null,
 					genres: item.genres,
 					userStatus: item.type === 'show' ? 'WATCHING' : 'PLAN_TO_WATCH'
 				})

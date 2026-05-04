@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { Button, Input, Skeleton } from '$lib/components/ui';
 	import { PosterCard } from '$lib/components/custom';
 	import { Search, X } from 'lucide-svelte';
@@ -69,8 +70,8 @@
 					overview: item.overview,
 					posterPath: item.posterPath,
 					backdropPath: item.backdropPath,
-					firstAirDate: item.year ? `${item.year}-01-01` : null,
-					releaseDate: item.year ? `${item.year}-01-01` : null,
+					firstAirDate: null,
+					releaseDate: null,
 					genres: item.genres,
 					userStatus: item.type === 'show' ? 'WATCHING' : 'PLAN_TO_WATCH'
 				})
@@ -83,6 +84,8 @@
 			toast.error('Failed to add');
 		}
 	}
+
+	onDestroy(() => clearTimeout(debounceTimer));
 </script>
 
 <svelte:head>

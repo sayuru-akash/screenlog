@@ -4,15 +4,16 @@
 	import { Skeleton } from '$lib/components/ui';
 	import { EmptyState } from '$lib/components/custom';
 	import { getPosterUrl, formatDate } from '$lib/utils';
+	import { userTimezone } from '$lib/stores/preferences';
 	import { CalendarDays } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 
 	let loading = $state(true);
 	let groups: Record<string, any[]> = $state({});
 
-	onMount(async () => {
+	async function loadCalendar() {
 		try {
-			const res = await fetch('/api/calendar');
+			const res = await fetch(`/api/calendar?timezone=${encodeURIComponent($userTimezone)}`);
 			const data = await res.json();
 			groups = data.groups || {};
 		} catch {
@@ -20,6 +21,10 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	onMount(() => {
+		loadCalendar();
 	});
 
 	const groupOrder = [
@@ -75,7 +80,7 @@
 									<p class="text-sm text-muted-foreground">
 										S{item.seasonNumber}E{item.episodeNumber} · {item.episodeTitle}
 									</p>
-									<p class="text-xs text-muted-foreground">{formatDate(item.airDate)}</p>
+									<p class="text-xs text-muted-foreground">{formatDate(item.airDate, $userTimezone)}</p>
 								</div>
 							</button>
 						{/each}

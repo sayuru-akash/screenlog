@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { Button, Input } from '$lib/components/ui';
 	import { Search } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
@@ -35,6 +36,8 @@
 		}, 350);
 	}
 
+	onDestroy(() => clearTimeout(debounceTimer));
+
 	async function addItem(item: any) {
 		try {
 			const res = await fetch('/api/watchlist', {
@@ -46,8 +49,8 @@
 					title: item.title,
 					posterPath: item.posterPath,
 					backdropPath: item.backdropPath,
-					firstAirDate: item.year ? `${item.year}-01-01` : null,
-					releaseDate: item.year ? `${item.year}-01-01` : null,
+					firstAirDate: null,
+					releaseDate: null,
 					genres: item.genres,
 					userStatus: item.type === 'show' ? 'WATCHING' : 'PLAN_TO_WATCH'
 				})
@@ -56,7 +59,9 @@
 				added = [...added, item.id];
 				toast.success('Added');
 			}
-		} catch {}
+		} catch {
+			toast.error('Failed to add');
+		}
 	}
 
 	function finish() {
@@ -83,6 +88,8 @@
 					<button
 						class="rounded-full px-4 py-2 text-sm font-medium transition-colors border {interests.includes(g) ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-secondary-foreground border-border'}"
 						onclick={() => toggleInterest(g)}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleInterest(g); } }}
+						tabindex="0"
 					>
 						{g}
 					</button>

@@ -18,8 +18,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const prefs = await db.userPreference.upsert({
 			where: { userId: locals.user.id },
-			create: { userId: locals.user.id, theme: body.theme || 'system', region: body.region, language: body.language },
-			update: { theme: body.theme, region: body.region, language: body.language }
+			create: { userId: locals.user.id, theme: body.theme || 'system', region: body.region, language: body.language, timezone: body.timezone || 'Asia/Colombo' },
+			update: { theme: body.theme, region: body.region, language: body.language, timezone: body.timezone }
 		});
 		return json({ preferences: prefs });
 	} catch (e: any) {

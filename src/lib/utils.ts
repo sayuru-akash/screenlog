@@ -5,13 +5,27 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: Date | string | null): string {
+export function formatDate(date: Date | string | null, timezone?: string): string {
 	if (!date) return '';
 	const d = typeof date === 'string' ? new Date(date) : date;
 	return d.toLocaleDateString('en-US', {
 		month: 'short',
 		day: 'numeric',
-		year: 'numeric'
+		year: 'numeric',
+		timeZone: timezone || 'UTC'
+	});
+}
+
+export function formatDateTime(date: Date | string | null, timezone?: string): string {
+	if (!date) return '';
+	const d = typeof date === 'string' ? new Date(date) : date;
+	return d.toLocaleDateString('en-US', {
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		timeZone: timezone || 'UTC'
 	});
 }
 
@@ -43,4 +57,25 @@ export function getBackdropUrl(path: string | null | undefined, size: 'w300' | '
 	if (!path) return '';
 	if (path.startsWith('http')) return path;
 	return `https://image.tmdb.org/t/p/${size}${path}`;
+}
+
+export function getAllTimezones(): string[] {
+	try {
+		// @ts-ignore
+		return Intl.supportedValuesOf('timeZone');
+	} catch {
+		return [
+			'Africa/Abidjan', 'Africa/Accra', 'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
+			'America/Anchorage', 'America/Argentina/Buenos_Aires', 'America/Bogota', 'America/Chicago', 'America/Denver',
+			'America/Lima', 'America/Los_Angeles', 'America/Mexico_City', 'America/New_York', 'America/Phoenix',
+			'America/Sao_Paulo', 'America/Toronto', 'America/Vancouver', 'Asia/Bangkok', 'Asia/Dubai', 'Asia/Hong_Kong',
+			'Asia/Jakarta', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Manila', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Singapore',
+			'Asia/Taipei', 'Asia/Tokyo', 'Asia/Colombo', 'Australia/Brisbane', 'Australia/Melbourne', 'Australia/Perth',
+			'Australia/Sydney', 'Europe/Amsterdam', 'Europe/Athens', 'Europe/Berlin', 'Europe/Brussels', 'Europe/Budapest',
+			'Europe/Copenhagen', 'Europe/Dublin', 'Europe/Helsinki', 'Europe/Istanbul', 'Europe/Lisbon', 'Europe/London',
+			'Europe/Madrid', 'Europe/Moscow', 'Europe/Oslo', 'Europe/Paris', 'Europe/Prague', 'Europe/Rome',
+			'Europe/Stockholm', 'Europe/Vienna', 'Europe/Warsaw', 'Europe/Zurich', 'Pacific/Auckland', 'Pacific/Fiji',
+			'Pacific/Honolulu'
+		];
+	}
 }

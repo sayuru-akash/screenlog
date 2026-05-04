@@ -247,6 +247,7 @@ model UserPreference {
   theme     String   @default("system")
   region    String?
   language  String?
+  timezone  String   @default("Asia/Colombo")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -9,6 +9,14 @@
 	let loading = $state(false);
 	let error = $state('');
 
+	function detectTimezone(): string {
+		try {
+			return Intl.DateTimeFormat().resolvedOptions().timeZone;
+		} catch {
+			return 'Asia/Colombo';
+		}
+	}
+
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
@@ -24,6 +32,18 @@
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data.message || 'Could not create account');
+			}
+
+			// Save detected timezone after successful signup
+			try {
+				const timezone = detectTimezone();
+				await fetch('/api/settings', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ timezone })
+				});
+			} catch {
+				// Non-critical: timezone can be set later in settings
 			}
 
 			toast.success('Account created');

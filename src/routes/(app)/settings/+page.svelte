@@ -3,13 +3,20 @@
 	import { goto } from '$app/navigation';
 	import { Button, Input, Label } from '$lib/components/ui';
 	import { theme } from '$lib/stores/theme';
-	import { Sun, Moon, Monitor, Trash2, LogOut } from 'lucide-svelte';
+	import { userTimezone } from '$lib/stores/preferences';
+	import { getAllTimezones } from '$lib/utils';
+	import { Sun, Moon, Monitor, Trash2, LogOut, Globe } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 
 	let region = $state('');
 	let language = $state('');
+	let timezone = $state('Asia/Colombo');
+	let timezoneSearch = $state('');
 	let saving = $state(false);
 	let deleteConfirm = $state(false);
+	let timezoneOpen = $state(false);
+
+	const allTimezones = getAllTimezones();
 
 	onMount(async () => {
 		try {
@@ -18,9 +25,16 @@
 			if (data.preferences) {
 				region = data.preferences.region || '';
 				language = data.preferences.language || '';
+				timezone = data.preferences.timezone || 'Asia/Colombo';
 			}
 		} catch {}
 	});
+
+	const filteredTimezones = $derived(
+		timezoneSearch.trim()
+			? allTimezones.filter((tz) => tz.toLowerCase().includes(timezoneSearch.toLowerCase()))
+			: allTimezones
+	);
 
 	async function saveSettings() {
 		saving = true;
@@ -28,8 +42,9 @@
 			await fetch('/api/settings', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ region, language })
+				body: JSON.stringify({ region, language, timezone })
 			});
+			userTimezone.set(timezone);
 			toast.success('Settings saved');
 		} catch {
 			toast.error('Failed to save');
@@ -39,14 +54,23 @@
 	}
 
 	async function signOut() {
-		await fetch('/api/auth/sign-out', { method: 'POST' });
-		goto('/');
+		try {
+			await fetch('/api/auth/sign-out', { method: 'POST' });
+			goto('/');
+		} catch {
+			toast.error('Failed to sign out');
+		}
 	}
 
 	async function deleteAccount() {
-		// Placeholder - would need proper implementation
 		toast.info('Contact support to delete your account');
 		deleteConfirm = false;
+	}
+
+	function selectTimezone(tz: string) {
+		timezone = tz;
+		timezoneOpen = false;
+		timezoneSearch = '';
 	}
 </script>
 
@@ -85,7 +109,7 @@
 		</div>
 	</section>
 
-	<!-- Region/Language -->
+	<!-- Region/Language/Timezone -->
 	<section class="rounded-xl bg-card p-5 border border-border space-y-4">
 		<h2 class="font-semibold">Preferences</h2>
 		<div class="space-y-3">
@@ -96,6 +120,48 @@
 			<div class="space-y-2">
 				<Label for="language">Language</Label>
 				<Input id="language" bind:value={language} placeholder="e.g. en" />
+			</div>
+			<div class="space-y-2 relative">
+				<Label for="timezone">Timezone</Label>
+				<button
+					id="timezone"
+					class="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+					onclick={() => timezoneOpen = !timezoneOpen}
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); timezoneOpen = !timezoneOpen; } }}
+					type="button"
+				>
+					<span class="flex items-center gap-2">
+						<Globe class="h-4 w-4 text-muted-foreground" />
+						{timezone}
+					</span>
+					<span class="text-xs text-muted-foreground">
+						{new Date().toLocaleTimeString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
+					</span>
+				</button>
+				{#if timezoneOpen}
+					<div class="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg max-h-64 overflow-hidden flex flex-col">
+						<div class="p-2 border-b border-border">
+							<Input
+								placeholder="Search timezone..."
+								bind:value={timezoneSearch}
+								class="h-8"
+							/>
+						</div>
+						<div class="overflow-y-auto flex-1 p-1">
+							{#each filteredTimezones as tz}
+								<button
+									class="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent {tz === timezone ? 'bg-accent font-medium' : ''}"
+									onclick={() => selectTimezone(tz)}
+								>
+									{tz}
+								</button>
+							{/each}
+							{#if filteredTimezones.length === 0}
+								<p class="px-2 py-4 text-center text-sm text-muted-foreground">No timezones found</p>
+							{/if}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 		<Button class="w-full" onclick={saveSettings} disabled={saving}>

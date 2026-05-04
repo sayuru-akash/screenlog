@@ -45,7 +45,7 @@
 				<Button
 					size="icon"
 					variant={added ? 'default' : 'secondary'}
-					class="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+					class="h-8 w-8 rounded-full opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
 					onclick={(e: MouseEvent) => { e.stopPropagation(); onAdd(); }}
 				>
 					{#if added}

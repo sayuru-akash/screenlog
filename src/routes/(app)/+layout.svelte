@@ -3,10 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { Home, Search, CalendarDays, Compass, User, LogOut, Settings, Sun, Moon, Monitor } from 'lucide-svelte';
 	import { theme } from '$lib/stores/theme';
+	import { userTimezone } from '$lib/stores/preferences';
 	import { cn, getInitials } from '$lib/utils';
 	import { Button } from '$lib/components/ui';
+	import { toast } from 'svelte-sonner';
 
-	let { children } = $props();
+	let { children, data } = $props();
 	let mobileMenuOpen = $state(false);
 
 	const navItems = [
@@ -17,13 +19,31 @@
 		{ href: '/profile', label: 'Profile', icon: User }
 	];
 
+	// Initialize timezone from server preferences
+	$effect(() => {
+		if (data.preferences?.timezone) {
+			userTimezone.set(data.preferences.timezone);
+		}
+	});
+
 	async function signOut() {
-		await fetch('/api/auth/sign-out', { method: 'POST' });
-		goto('/');
+		try {
+			await fetch('/api/auth/sign-out', { method: 'POST' });
+			goto('/');
+		} catch {
+			toast.error('Failed to sign out');
+		}
+	}
+
+	function closeThemeDropdown(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.closest('.theme-dropdown')) mobileMenuOpen = false;
 	}
 
 	const user = $derived($page.data.user);
 </script>
+
+<svelte:window onclick={closeThemeDropdown} />
 
 <div class="min-h-screen bg-background pb-20 md:pb-0">
 	<!-- Desktop top nav -->
@@ -46,7 +66,7 @@
 			{/each}
 		</nav>
 		<div class="flex items-center gap-2">
-			<div class="relative">
+			<div class="relative theme-dropdown">
 				<Button variant="ghost" size="icon" onclick={() => mobileMenuOpen = !mobileMenuOpen}>
 					{#if $theme === 'dark'}
 						<Moon class="h-4 w-4" />
@@ -87,11 +107,16 @@
 	<!-- Mobile header -->
 	<header class="flex md:hidden items-center justify-between border-b border-border px-4 py-3">
 		<a href="/home" class="text-lg font-bold tracking-tight">Screenlog</a>
-		{#if user}
-			<a href="/profile" class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-				{getInitials(user.name || user.email)}
+		<div class="flex items-center gap-2">
+			<a href="/settings" class="rounded-md p-2 text-muted-foreground hover:text-foreground">
+				<Settings class="h-4 w-4" />
 			</a>
-		{/if}
+			{#if user}
+				<a href="/profile" class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
+					{getInitials(user.name || user.email)}
+				</a>
+			{/if}
+		</div>
 	</header>
 
 	<!-- Page content -->

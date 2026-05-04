@@ -5,6 +5,7 @@
 	import { Button, Skeleton } from '$lib/components/ui';
 	import { StatusPill } from '$lib/components/custom';
 	import { getBackdropUrl, getPosterUrl, formatDate } from '$lib/utils';
+	import { userTimezone } from '$lib/stores/preferences';
 	import { Check, ChevronDown, ChevronUp, Trash2, RotateCcw } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -24,22 +25,27 @@
 	async function loadShow() {
 		loading = true;
 		try {
-			const [showRes, progRes] = await Promise.all([
-				fetch(`/api/shows/${showId}`),
-				fetch(`/api/progress?showId=${showId}`)
-			]);
-			const data = await showRes.json();
-			show = data.show;
-			userShow = data.userShow;
-			const p = await progRes.json();
-			progress = p.progress || [];
-			if (show?.seasons?.length > 0) {
-				selectedSeason = show.seasons[0].seasonNumber;
-			}
+			await refreshData();
 		} catch {
 			toast.error('Failed to load show');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function refreshData() {
+		const [showRes, progRes] = await Promise.all([
+			fetch(`/api/shows/${showId}`),
+			fetch(`/api/progress?showId=${showId}`)
+		]);
+		const data = await showRes.json();
+		show = data.show;
+		userShow = data.userShow;
+		const p = await progRes.json();
+		progress = p.progress || [];
+		if (show?.seasons?.length > 0) {
+			const hasSeason = show.seasons.some((s: any) => s.seasonNumber === selectedSeason);
+			if (!hasSeason) selectedSeason = show.seasons[0].seasonNumber;
 		}
 	}
 
@@ -62,11 +68,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ action: watching ? 'unwatch' : 'watch', episodeId, showId })
 			});
-			if (watching) {
-				progress = progress.filter((p) => p.episodeId !== episodeId);
-			} else {
-				progress = [...progress, { episodeId }];
-			}
+			await refreshData();
 		} catch {
 			toast.error('Failed to update');
 		}
@@ -80,8 +82,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ action: 'markSeason', seasonId: currentSeason.id })
 			});
-			const newIds = currentSeason.episodes.map((e: any) => e.id).filter((id: string) => !isWatched(id));
-			progress = [...progress, ...newIds.map((id: string) => ({ episodeId: id }))];
+			await refreshData();
 			toast.success('Season marked as watched');
 		} catch {
 			toast.error('Failed to update');
@@ -95,9 +96,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ action: 'markCaughtUp', showId })
 			});
-			const allEps = show.seasons.flatMap((s: any) => s.episodes);
-			progress = allEps.map((e: any) => ({ episodeId: e.id }));
-			userShow = { ...userShow, status: 'CAUGHT_UP' };
+			await refreshData();
 			toast.success('Marked as caught up');
 		} catch {
 			toast.error('Failed to update');
@@ -111,13 +110,21 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ action: 'resetShow', showId })
 			});
-			progress = [];
-			userShow = { ...userShow, status: 'PLAN_TO_WATCH' };
+			await refreshData();
 			toast.success('Progress reset');
 		} catch {
 			toast.error('Failed to reset');
 		}
 	}
+
+	const statusOptions = [
+		{ value: 'PLAN_TO_WATCH', label: 'Plan' },
+		{ value: 'WATCHING', label: 'Watching' },
+		{ value: 'CAUGHT_UP', label: 'Caught Up' },
+		{ value: 'COMPLETED', label: 'Completed' },
+		{ value: 'PAUSED', label: 'Paused' },
+		{ value: 'DROPPED', label: 'Dropped' }
+	];
 
 	async function changeStatus(status: string) {
 		try {
@@ -189,30 +196,39 @@
 			</div>
 		</div>
 
-		<!-- Actions -->
-		<div class="flex flex-wrap gap-2">
-			{#if !userShow}
-				<Button onclick={() => changeStatus('WATCHING')}>Add to Watchlist</Button>
-			{:else}
-				<Button variant="secondary" onclick={removeFromWatchlist}>
-					<Trash2 class="mr-1 h-4 w-4" /> Remove
-				</Button>
-				<Button variant="secondary" onclick={markCaughtUp}>Mark Caught Up</Button>
-				<Button variant="secondary" onclick={resetProgress}>
-					<RotateCcw class="mr-1 h-4 w-4" /> Reset
-				</Button>
-			{/if}
-		</div>
-
-		{#if userShow}
-			<!-- Progress -->
-			<div class="rounded-xl bg-card p-4 border border-border">
-				<div class="flex items-center justify-between">
-					<span class="text-sm font-medium">Progress</span>
-					<span class="text-sm text-muted-foreground">{totalWatched} / {totalShowEpisodes}</span>
+		<!-- Tracking -->
+		{#if !userShow}
+			<Button onclick={() => changeStatus('WATCHING')}>Add to Watchlist</Button>
+		{:else}
+			<div class="rounded-xl bg-card border border-border p-4 space-y-4">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="flex items-center gap-3">
+						<span class="text-sm font-medium">Progress</span>
+						<span class="text-sm text-muted-foreground">{totalWatched} / {totalShowEpisodes}</span>
+					</div>
+					<div class="flex items-center gap-2">
+						<Button size="sm" variant="ghost" onclick={markCaughtUp}>Caught Up</Button>
+						<Button size="sm" variant="ghost" onclick={resetProgress}>
+							<RotateCcw class="mr-1 h-3.5 w-3.5" /> Reset
+						</Button>
+						<Button size="sm" variant="ghost" class="text-destructive" onclick={removeFromWatchlist}>
+							<Trash2 class="mr-1 h-3.5 w-3.5" /> Remove
+						</Button>
+					</div>
 				</div>
-				<div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+				<div class="h-2 w-full overflow-hidden rounded-full bg-muted">
 					<div class="h-full rounded-full bg-primary transition-all" style="width: {totalShowEpisodes ? (totalWatched / totalShowEpisodes) * 100 : 0}%"></div>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					{#each statusOptions as opt}
+						<Button
+							size="sm"
+							variant={userShow.status === opt.value ? 'default' : 'outline'}
+							onclick={() => changeStatus(opt.value)}
+						>
+							{opt.label}
+						</Button>
+					{/each}
 				</div>
 			</div>
 		{/if}
@@ -227,63 +243,74 @@
 
 		<!-- Seasons -->
 		{#if show.seasons?.length > 0}
-			<section>
-				<div class="mb-4 flex items-center gap-2 overflow-x-auto">
-					{#each show.seasons as season}
-						<Button
-							size="sm"
-							variant={selectedSeason === season.seasonNumber ? 'default' : 'secondary'}
-							onclick={() => selectedSeason = season.seasonNumber}
+			<section class="space-y-4">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="flex items-center gap-3">
+						<select
+							class="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+							bind:value={selectedSeason}
+							onchange={() => expandedEpisode = null}
 						>
-							{season.name || `Season ${season.seasonNumber}`}
-						</Button>
-					{/each}
-				</div>
-
-				{#if userShow}
-					<div class="mb-3 flex items-center justify-between">
-						<span class="text-sm text-muted-foreground">{watchedCount} / {totalEpisodes} watched</span>
-						<Button size="sm" variant="ghost" onclick={markSeasonWatched}>Mark Season Watched</Button>
+							{#each show.seasons as season}
+								<option value={season.seasonNumber}>
+									{season.name || `Season ${season.seasonNumber}`}
+									{#if season.episodeCount}({season.episodeCount} eps){/if}
+								</option>
+							{/each}
+						</select>
+						{#if userShow}
+							<span class="text-sm text-muted-foreground">{watchedCount} / {totalEpisodes} watched</span>
+						{/if}
 					</div>
-				{/if}
+					{#if userShow}
+						<Button size="sm" variant="ghost" onclick={markSeasonWatched}>Mark Season Watched</Button>
+					{/if}
+				</div>
 
 				<div class="space-y-2">
 					{#each seasonEpisodes as episode (episode.id)}
+						{@const watched = isWatched(episode.id)}
 						<div class="rounded-lg border border-border bg-card">
-							<button
-								class="flex w-full items-center gap-3 p-3 text-left"
-								onclick={() => expandedEpisode = expandedEpisode === episode.id ? null : episode.id}
-							>
+							<div class="flex items-center gap-2 p-3">
 								{#if userShow}
-									<div
-										class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded border border-border"
-										onclick={(e) => { e.stopPropagation(); toggleEpisode(episode.id); }}
-										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleEpisode(episode.id); } }}
-										role="button"
-										tabindex="0"
+									<Button
+										size="icon"
+										variant="outline"
+										class="h-9 w-9 shrink-0 rounded-md"
+										onclick={() => toggleEpisode(episode.id)}
+										aria-label={watched ? 'Mark unwatched' : 'Mark watched'}
 									>
-										{#if isWatched(episode.id)}
-											<Check class="h-3.5 w-3.5 text-primary" />
+										{#if watched}
+											<Check class="h-4 w-4 text-primary" />
 										{/if}
-									</div>
+									</Button>
 								{/if}
-								<div class="min-w-0 flex-1">
+								<button
+									class="min-w-0 flex-1 text-left"
+									onclick={() => expandedEpisode = expandedEpisode === episode.id ? null : episode.id}
+								>
 									<p class="text-sm font-medium">
 										S{episode.seasonNumber}E{episode.episodeNumber} · {episode.name}
 									</p>
 									<p class="text-xs text-muted-foreground">
-										{formatDate(episode.airDate)}
+										{formatDate(episode.airDate, $userTimezone)}
 										{#if episode.runtime}· {episode.runtime}m{/if}
 									</p>
-								</div>
+								</button>
 								{#if episode.overview}
-									{#if expandedEpisode === episode.id}
-										<ChevronUp class="h-4 w-4 shrink-0 text-muted-foreground" />
-									{:else}
-										<ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground" />
-									{/if}
+									<button
+										class="shrink-0 p-1 text-muted-foreground hover:text-foreground"
+										onclick={() => expandedEpisode = expandedEpisode === episode.id ? null : episode.id}
+										aria-label={expandedEpisode === episode.id ? 'Collapse' : 'Expand'}
+									>
+										{#if expandedEpisode === episode.id}
+											<ChevronUp class="h-4 w-4" />
+										{:else}
+											<ChevronDown class="h-4 w-4" />
+										{/if}
+									</button>
 								{/if}
-							</button>
+							</div>
 							{#if expandedEpisode === episode.id && episode.overview}
 								<div class="px-3 pb-3 pt-0">
 									<p class="text-sm text-muted-foreground">{episode.overview}</p>

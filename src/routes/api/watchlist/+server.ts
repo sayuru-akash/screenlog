@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
+import { getShowDetails, getSeasonEpisodes } from '$lib/services/tmdb';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -8,7 +9,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 	try {
 		const shows = await db.userShow.findMany({
 			where: { userId },
-			include: { show: true },
+			include: {
+				show: { include: { seasons: { include: { episodes: true } } } }
+			},
 			orderBy: { updatedAt: 'desc' }
 		});
 		const movies = await db.userMovie.findMany({
@@ -28,23 +31,52 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const userId = locals.user.id;
 	try {
 		if (body.type === 'show') {
-			const existing = await db.show.findUnique({ where: { tmdbId: body.tmdbId } });
-			let showId = existing?.id;
-			if (!showId) {
-				const show = await db.show.create({
+			let show = await db.show.findUnique({ where: { tmdbId: body.tmdbId } });
+			if (!show) {
+				const details = await getShowDetails(body.tmdbId);
+				show = await db.show.create({
 					data: {
 						tmdbId: body.tmdbId,
-						title: body.title,
-						overview: body.overview,
-						posterPath: body.posterPath,
-						backdropPath: body.backdropPath,
-						firstAirDate: body.firstAirDate ? new Date(body.firstAirDate) : null,
-						genres: body.genres || [],
-						status: body.status
+						title: details.title || body.title,
+						overview: details.overview || body.overview,
+						posterPath: details.posterPath || body.posterPath,
+						backdropPath: details.backdropPath || body.backdropPath,
+						firstAirDate: details.firstAirDate ? new Date(details.firstAirDate) : null,
+						genres: details.genres || body.genres || [],
+						status: details.status || body.status
 					}
 				});
-				showId = show.id;
+				// Eagerly fetch and store seasons + episodes
+				for (const s of details.seasons) {
+					const season = await db.season.create({
+						data: {
+							showId: show.id,
+							seasonNumber: s.seasonNumber,
+							name: s.name,
+							overview: s.overview,
+							posterPath: s.posterPath,
+							airDate: s.airDate ? new Date(s.airDate) : null,
+							episodeCount: s.episodeCount
+						}
+					});
+					const eps = await getSeasonEpisodes(body.tmdbId, s.seasonNumber);
+					for (const ep of eps) {
+						await db.episode.create({
+							data: {
+								seasonId: season.id,
+								seasonNumber: ep.seasonNumber,
+								episodeNumber: ep.episodeNumber,
+								name: ep.name,
+								overview: ep.overview,
+								stillPath: ep.stillPath,
+								airDate: ep.airDate ? new Date(ep.airDate) : null,
+								runtime: ep.runtime
+							}
+						});
+					}
+				}
 			}
+			const showId = show.id;
 			const userShow = await db.userShow.upsert({
 				where: { userId_showId: { userId, showId } },
 				create: { userId, showId, status: body.userStatus || 'PLAN_TO_WATCH' },
